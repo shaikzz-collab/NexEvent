@@ -117,6 +117,12 @@ dist/assets/index-D93ObSnU.js   1,119.51 kB │ gzip: 320.06 kB
 
 ## 🏁 Quick-Start & Evaluation Sandbox
 
+### 🌐 Live Production Deployment
+The NexEvent Hub platform is built and deployed live on GitHub Pages:
+👉 **[NexEvent Hub Deployed Platform](https://shaikzz-collab.github.io/NexEvent/)**
+
+*Every commit to the `main` branch automatically triggers our optimized GitHub Actions CI/CD pipeline which clean-installs dependencies, compiles the Vite production bundle, and deploys the static resources seamlessly.*
+
 ### 1. Launching Locally:
 ```powershell
 # Clone the repository
@@ -130,6 +136,13 @@ npm install
 npm run dev
 ```
 *Open [http://localhost:5173/](http://localhost:5173/) (or the next available port indicated) to load the site.*
+
+### 2. Manual Production Deployment:
+To manually build and deploy the production assets to GitHub Pages:
+```powershell
+npm run deploy
+```
+*This script triggers `predeploy` to build the Vite distribution, then uses `gh-pages` to securely deploy the compiled `dist/` folder directly.*
 
 ### 2. Pre-Seeded Evaluation Credentials:
 NexEvent Hub comes pre-seeded with rich sandbox data inside local storage on first load. You can immediately log into the following evaluation profiles to test the platform:
