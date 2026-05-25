@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can only read/write their own profile
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+    }
+
+    // Events: anyone can read, only organizers can write
+    match /events/{eventId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'organizer';
+    }
+
+    // Registrations: participants see own, organizers see all for their event
+    match /registrations/{regId} {
+      allow read: if request.auth.uid == resource.data.userId ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'organizer';
+      allow create: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'participant';
+      allow update: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'organizer';
+    }
+
+    // Tasks/Volunteers: everyone can read, organizers and volunteers can write
+    match /tasks/{taskId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'organizer' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'volunteer');
+    }
+
+    // Notifications: users can only read/write their own
+    match /notifications/{userId}/items/{notifId} {
+      allow read, write: if request.auth.uid == userId;
+    }
+
+    // Certificates: public read, system/organizer create
+    match /certificates/{certId} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'organizer';
+    }
+  }
+}
