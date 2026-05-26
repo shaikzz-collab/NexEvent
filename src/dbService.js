@@ -25,17 +25,32 @@ export const generateCertificateHash = (eventId, userId, issuedAt = Date.now()) 
 class SandboxDB {
   constructor() {
     this.storageKey = 'nexevent_sandbox_db';
+    this.memoryDb = null;
     this.initialize();
   }
 
   initialize() {
-    if (!localStorage.getItem(this.storageKey)) {
-      this.resetDb();
+    try {
+      if (!localStorage.getItem(this.storageKey)) {
+        this.resetDb();
+      }
+    } catch (err) {
+      console.warn("localStorage access blocked or quota exceeded. Falling back to memory storage.", err);
+      this.memoryDb = {
+        users: {},
+        events: {},
+        registrations: {},
+        tasks: {},
+        notifications: {},
+        certificates: {},
+        applications: {},
+        sponsorships: {}
+      };
     }
   }
 
   resetDb() {
-    localStorage.setItem(this.storageKey, JSON.stringify({
+    const defaultData = {
       users: {},
       events: {},
       registrations: {},
@@ -44,20 +59,73 @@ class SandboxDB {
       certificates: {},
       applications: {},
       sponsorships: {}
-    }));
-  }
-
-  getDb() {
+    };
     try {
-      return JSON.parse(localStorage.getItem(this.storageKey)) || {};
-    } catch {
-      this.resetDb();
-      return JSON.parse(localStorage.getItem(this.storageKey));
+      localStorage.setItem(this.storageKey, JSON.stringify(defaultData));
+    } catch (err) {
+      console.warn("Failed to reset localStorage DB. Writing to memory instead.", err);
+      this.memoryDb = defaultData;
     }
   }
 
+  getDb() {
+    if (this.memoryDb) {
+      return this.memoryDb;
+    }
+    try {
+      const data = localStorage.getItem(this.storageKey);
+      if (data) {
+        return JSON.parse(data) || {};
+      }
+    } catch (err) {
+      console.warn("Failed to read from localStorage. Returning memory state.", err);
+    }
+    
+    // In-memory fallback initialization if needed
+    if (!this.memoryDb) {
+      this.memoryDb = {
+        users: {},
+        events: {},
+        registrations: {},
+        tasks: {},
+        notifications: {},
+        certificates: {},
+        applications: {},
+        sponsorships: {}
+      };
+    }
+    return this.memoryDb;
+  }
+
   saveDb(data) {
-    localStorage.setItem(this.storageKey, JSON.stringify(data));
+    if (this.memoryDb) {
+      this.memoryDb = data;
+      return;
+    }
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(data));
+    } catch (err) {
+      console.error("QuotaExceededError caught! Safely falling back to memory database to prevent crash.", err);
+      this.memoryDb = data;
+      
+      // Automatic Self-Healing: Prune notifications to free up space and try again
+      try {
+        const pruned = JSON.parse(JSON.stringify(data));
+        const notifs = Object.values(pruned.notifications || {});
+        if (notifs.length > 5) {
+          const sorted = notifs.sort((a, b) => b.timestamp - a.timestamp);
+          pruned.notifications = {};
+          sorted.slice(0, 5).forEach(n => {
+            pruned.notifications[n.id] = n;
+          });
+        }
+        localStorage.setItem(this.storageKey, JSON.stringify(pruned));
+        this.memoryDb = null; // Pruning worked, clear memory fallback
+        console.log("Successfully pruned database notifications to resolve QuotaExceededError.");
+      } catch (pruneErr) {
+        console.warn("Database pruning failed or did not resolve quota. Running strictly in-memory.", pruneErr);
+      }
+    }
   }
 
   seedDemo() {
@@ -545,11 +613,22 @@ export const validateAndCheckInTicket = async (hash, eventId) => {
   // Rate-limiting simulated: check if checking in too rapidly (mocked)
   const lastCheckKey = `last_check_${userId}`;
   const now = Date.now();
-  const lastCheck = sessionStorage.getItem(lastCheckKey);
+  let lastCheck = null;
+  try {
+    lastCheck = sessionStorage.getItem(lastCheckKey);
+  } catch (e) {
+    console.warn("sessionStorage read blocked", e);
+  }
+
   if (lastCheck && now - parseInt(lastCheck) < 5000) {
     return { success: false, message: "⚠️ Rate Limit Triggered. Please wait 5 seconds between scans." };
   }
-  sessionStorage.setItem(lastCheckKey, String(now));
+
+  try {
+    sessionStorage.setItem(lastCheckKey, String(now));
+  } catch (e) {
+    console.warn("sessionStorage write blocked", e);
+  }
 
   // Query registration records
   const regs = await fetchCollection('registrations', [
