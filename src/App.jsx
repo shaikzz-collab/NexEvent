@@ -2,15 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Bell, ShieldCheck, LogOut, LogIn, Award, Sparkles, Clock, Calendar, Users, Eye, EyeOff, User, Compass, HelpCircle, Search } from 'lucide-react';
 import { checkAndSeedDatabase, fetchCollection, pushNotification, saveDocument, updateDocument, isRealFirebase } from './dbService';
 
-// Import portal sub-views
-import PortalOrganizer from './components/PortalOrganizer';
-import PortalVolunteer from './components/PortalVolunteer';
-import PortalSponsor from './components/PortalSponsor';
-import PortalParticipant from './components/PortalParticipant';
-import VolunteerPassport from './components/VolunteerPassport';
-import VerifyCertificate from './components/VerifyCertificate';
+// Import portal sub-views using React.lazy for optimized PageSpeed chunk-splitting
+const PortalOrganizer = React.lazy(() => import('./components/PortalOrganizer'));
+const PortalVolunteer = React.lazy(() => import('./components/PortalVolunteer'));
+const PortalSponsor = React.lazy(() => import('./components/PortalSponsor'));
+const PortalParticipant = React.lazy(() => import('./components/PortalParticipant'));
+const VolunteerPassport = React.lazy(() => import('./components/VolunteerPassport'));
+const VerifyCertificate = React.lazy(() => import('./components/VerifyCertificate'));
+const AdminHealth = React.lazy(() => import('./components/AdminHealth'));
+
 import DevTestPanel from './components/DevTestPanel';
-import AdminHealth from './components/AdminHealth';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -727,9 +728,11 @@ export default function App() {
         </div>
       </nav>
 
-      {/* Main Client Content */}
+      {/* Main Client Content with Suspense for fast dynamic chunk rendering */}
       <main style={{ flex: 1, minHeight: 'calc(100vh - 64px)' }}>
-        {renderHashView()}
+        <React.Suspense fallback={<div className="loading-container"><div className="loading-spinner"></div></div>}>
+          {renderHashView()}
+        </React.Suspense>
       </main>
 
       {/* Footer */}
