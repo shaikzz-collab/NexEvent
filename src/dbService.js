@@ -69,21 +69,22 @@ class SandboxDB {
   }
 
   getDb() {
+    let rawData = null;
     if (this.memoryDb) {
-      return this.memoryDb;
-    }
-    try {
-      const data = localStorage.getItem(this.storageKey);
-      if (data) {
-        return JSON.parse(data) || {};
+      rawData = this.memoryDb;
+    } else {
+      try {
+        const data = localStorage.getItem(this.storageKey);
+        if (data) {
+          rawData = JSON.parse(data) || {};
+        }
+      } catch (err) {
+        console.warn("Failed to read from localStorage. Returning memory state.", err);
       }
-    } catch (err) {
-      console.warn("Failed to read from localStorage. Returning memory state.", err);
     }
     
-    // In-memory fallback initialization if needed
-    if (!this.memoryDb) {
-      this.memoryDb = {
+    if (!rawData) {
+      rawData = {
         users: {},
         events: {},
         registrations: {},
@@ -93,8 +94,59 @@ class SandboxDB {
         applications: {},
         sponsorships: {}
       };
+      this.memoryDb = rawData;
     }
-    return this.memoryDb;
+
+    // Retroactive self-healing repair: Fix any events that got identical generic crowd banners during previous quota rescues
+    let needsRepairSave = false;
+    if (rawData.events) {
+      Object.keys(rawData.events).forEach(id => {
+        const ev = rawData.events[id];
+        // Match either the exact default crowd placeholder or any uncompressed base64 data URL
+        if (ev.bannerUrl && (ev.bannerUrl.includes('photo-1540575467063-178a50c2df87') || ev.bannerUrl.startsWith('data:image/'))) {
+          // Keep the default seeder banners on our 3 core events, repair any newly created custom events
+          if (ev.id !== 'demo-event-1' && ev.id !== 'demo-event-2' && ev.id !== 'demo-event-3') {
+            const titleLower = ev.title.toLowerCase();
+            const catLower = (ev.category || "").toLowerCase();
+            let newBanner = "";
+            
+            if (catLower.includes('tech') || catLower.includes('hack') || titleLower.includes('tech') || titleLower.includes('dev') || titleLower.includes('aws') || titleLower.includes('code')) {
+              newBanner = 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop&q=80';
+            } else if (catLower.includes('cult') || catLower.includes('music') || catLower.includes('dance') || catLower.includes('art') || titleLower.includes('concert') || titleLower.includes('harmony') || titleLower.includes('fest') || titleLower.includes('liwin') || titleLower.includes('s summit') || titleLower.includes('mumbai')) {
+              newBanner = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80';
+            } else if (catLower.includes('sport') || catLower.includes('run') || catLower.includes('marathon') || titleLower.includes('marathon') || titleLower.includes('run') || titleLower.includes('marathonx')) {
+              newBanner = 'https://images.unsplash.com/photo-1502224562085-639556652f33?w=800&auto=format&fit=crop&q=80';
+            } else if (catLower.includes('acad') || catLower.includes('talk') || catLower.includes('seminar') || catLower.includes('ted') || titleLower.includes('tedx') || titleLower.includes('summit') || titleLower.includes('presto')) {
+              newBanner = 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=800&auto=format&fit=crop&q=80';
+            } else {
+              // Deterministically hash the title to give unrelated events a unique placeholder to avoid duplication!
+              const charCodeSum = ev.title.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+              const randomPlaceholders = [
+                'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+                'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&auto=format&fit=crop&q=80',
+                'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&auto=format&fit=crop&q=80',
+                'https://images.unsplash.com/photo-1505232458627-5ec90be5864c?w=800&auto=format&fit=crop&q=80'
+              ];
+              newBanner = randomPlaceholders[charCodeSum % randomPlaceholders.length];
+            }
+            
+            if (ev.bannerUrl !== newBanner) {
+              ev.bannerUrl = newBanner;
+              needsRepairSave = true;
+            }
+          }
+        }
+      });
+    }
+
+    if (needsRepairSave) {
+      setTimeout(() => {
+        this.saveDb(rawData);
+        console.log("Retroactive self-healing successfully repaired identical competitor event banner duplications!");
+      }, 100);
+    }
+    
+    return rawData;
   }
 
   clearOtherKeys() {
@@ -134,13 +186,34 @@ class SandboxDB {
       try {
         const pruned = JSON.parse(JSON.stringify(data));
         
-        // Clear massive base64 event banner images by replacing them with high-quality public URLs
+        // Clear massive base64 event banner images by replacing them with high-quality category-specific public URLs
         if (pruned.events) {
           Object.keys(pruned.events).forEach(id => {
             const ev = pruned.events[id];
             if (ev.bannerUrl && ev.bannerUrl.startsWith('data:image/')) {
-              console.log(`Self-healing: replacing heavy base64 banner for event "${ev.title}" with Unsplash placeholder.`);
-              ev.bannerUrl = 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800';
+              console.log(`Self-healing: replacing heavy base64 banner for event "${ev.title}" with category-specific Unsplash placeholder.`);
+              
+              const titleLower = ev.title.toLowerCase();
+              const catLower = (ev.category || "").toLowerCase();
+              
+              if (catLower.includes('tech') || catLower.includes('hack') || titleLower.includes('tech') || titleLower.includes('dev') || titleLower.includes('aws') || titleLower.includes('code')) {
+                ev.bannerUrl = 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop&q=80';
+              } else if (catLower.includes('cult') || catLower.includes('music') || catLower.includes('dance') || catLower.includes('art') || titleLower.includes('concert') || titleLower.includes('harmony') || titleLower.includes('fest') || titleLower.includes('liwin') || titleLower.includes('s summit') || titleLower.includes('mumbai')) {
+                ev.bannerUrl = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80';
+              } else if (catLower.includes('sport') || catLower.includes('run') || catLower.includes('marathon') || titleLower.includes('marathon') || titleLower.includes('run') || titleLower.includes('marathonx')) {
+                ev.bannerUrl = 'https://images.unsplash.com/photo-1502224562085-639556652f33?w=800&auto=format&fit=crop&q=80';
+              } else if (catLower.includes('acad') || catLower.includes('talk') || catLower.includes('seminar') || catLower.includes('ted') || titleLower.includes('tedx') || titleLower.includes('summit') || titleLower.includes('presto')) {
+                ev.bannerUrl = 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=800&auto=format&fit=crop&q=80';
+              } else {
+                const charCodeSum = ev.title.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+                const randomPlaceholders = [
+                  'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+                  'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&auto=format&fit=crop&q=80',
+                  'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&auto=format&fit=crop&q=80',
+                  'https://images.unsplash.com/photo-1505232458627-5ec90be5864c?w=800&auto=format&fit=crop&q=80'
+                ];
+                ev.bannerUrl = randomPlaceholders[charCodeSum % randomPlaceholders.length];
+              }
             }
           });
         }
