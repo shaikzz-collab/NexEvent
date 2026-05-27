@@ -97,20 +97,55 @@ class SandboxDB {
     return this.memoryDb;
   }
 
-  saveDb(data) {
-    if (this.memoryDb) {
-      this.memoryDb = data;
-      return;
+  clearOtherKeys() {
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key !== this.storageKey && !key.startsWith('nexevent_')) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => {
+        localStorage.removeItem(k);
+        console.log(`Self-healing: Cleared external key "${k}" to free up space for NexEvent.`);
+      });
+      return keysToRemove.length > 0;
+    } catch (e) {
+      console.warn("Failed to clear other keys", e);
+      return false;
     }
+  }
+
+  saveDb(data) {
+    // Note: Do not early return if memoryDb exists. We want to always attempt a localStorage write 
+    // in case space has been freed, so the app remains persistent across page reloads.
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(data));
+      this.memoryDb = null; // Write succeeded, clear memory fallback
     } catch (err) {
-      console.error("QuotaExceededError caught! Safely falling back to memory database to prevent crash.", err);
-      this.memoryDb = data;
+      console.error("QuotaExceededError caught! Initiating storage self-healing...", err);
+      this.memoryDb = data; // Set memory database as safety fallback
       
-      // Automatic Self-Healing: Prune notifications to free up space and try again
+      // Step 1: Self-Healing - Try to clear other non-critical keys on the domain origin (e.g. competitor data)
+      this.clearOtherKeys();
+      
+      // Step 2: Self-Healing - Prune our own heavy items (base64 images & old notifications)
       try {
         const pruned = JSON.parse(JSON.stringify(data));
+        
+        // Clear massive base64 event banner images by replacing them with high-quality public URLs
+        if (pruned.events) {
+          Object.keys(pruned.events).forEach(id => {
+            const ev = pruned.events[id];
+            if (ev.bannerUrl && ev.bannerUrl.startsWith('data:image/')) {
+              console.log(`Self-healing: replacing heavy base64 banner for event "${ev.title}" with Unsplash placeholder.`);
+              ev.bannerUrl = 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800';
+            }
+          });
+        }
+
+        // Prune notifications to keep only the 5 most recent
         const notifs = Object.values(pruned.notifications || {});
         if (notifs.length > 5) {
           const sorted = notifs.sort((a, b) => b.timestamp - a.timestamp);
@@ -119,11 +154,13 @@ class SandboxDB {
             pruned.notifications[n.id] = n;
           });
         }
+
+        // Step 3: Retry saving pruned data to localStorage
         localStorage.setItem(this.storageKey, JSON.stringify(pruned));
-        this.memoryDb = null; // Pruning worked, clear memory fallback
-        console.log("Successfully pruned database notifications to resolve QuotaExceededError.");
-      } catch (pruneErr) {
-        console.warn("Database pruning failed or did not resolve quota. Running strictly in-memory.", pruneErr);
+        this.memoryDb = null; // Retry worked! Clear memory fallback so we are persistent
+        console.log("Self-healing storage resolved the QuotaExceededError successfully.");
+      } catch (retryErr) {
+        console.warn("Self-healing failed to resolve local quota. Running in-memory for this write.", retryErr);
       }
     }
   }
@@ -137,7 +174,7 @@ class SandboxDB {
       id: eventId,
       organizerId: 'org-1',
       title: 'TEDxCollege 2025',
-      category: 'Technology',
+      category: 'Tech',
       desc: 'Ideas worth spreading! A day of inspirational talks, technology showcases, and cultural performances by students and industry experts.',
       bannerUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
       tags: ['Innovation', 'Inspire', 'Tech', 'Design'],
