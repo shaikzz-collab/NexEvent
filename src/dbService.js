@@ -31,12 +31,38 @@ class SandboxDB {
 
   initialize() {
     try {
-      if (!localStorage.getItem(this.storageKey)) {
+      const stored = localStorage.getItem(this.storageKey);
+      if (!stored) {
         this.resetDb();
+      } else {
+        // Upgrade check: Force database upgrade if schema version is older than V2
+        const parsed = JSON.parse(stored);
+        if (!parsed.version || parsed.version < 2) {
+          console.log("Migrating local database to Version 2: Repairing legacy duplicate banners...");
+          parsed.version = 2;
+          
+          if (parsed.events) {
+            Object.keys(parsed.events).forEach(id => {
+              const ev = parsed.events[id];
+              const hasCrowdBanner = ev.bannerUrl && ev.bannerUrl.includes('photo-1540575467063-178a50c2df87');
+              const hasOfficeBanner = ev.bannerUrl && ev.bannerUrl.includes('photo-1504384308090-c894fdcc538d');
+              const hasBase64Banner = ev.bannerUrl && ev.bannerUrl.startsWith('data:image/');
+              
+              if (ev.bannerUrl && (hasCrowdBanner || hasOfficeBanner || hasBase64Banner)) {
+                if (ev.id !== 'demo-event-1' && ev.id !== 'demo-event-2' && ev.id !== 'demo-event-3') {
+                  ev.bannerUrl = this.getDiverseBanner(ev.title, ev.category);
+                }
+              }
+            });
+          }
+          localStorage.setItem(this.storageKey, JSON.stringify(parsed));
+          console.log("Database successfully migrated to Version 2 with diverse banners!");
+        }
       }
     } catch (err) {
       console.warn("localStorage access blocked or quota exceeded. Falling back to memory storage.", err);
       this.memoryDb = {
+        version: 2,
         users: {},
         events: {},
         registrations: {},
@@ -51,6 +77,7 @@ class SandboxDB {
 
   resetDb() {
     const defaultData = {
+      version: 2,
       users: {},
       events: {},
       registrations: {},
