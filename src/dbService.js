@@ -68,6 +68,62 @@ class SandboxDB {
     }
   }
 
+  getDiverseBanner(title, category) {
+    const titleLower = (title || "").toLowerCase();
+    const catLower = (category || "").toLowerCase();
+    
+    // Hash title deterministically to get a stable index
+    const charCodeSum = title.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    
+    const techPool = [
+      'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80'
+    ];
+    
+    const cultPool = [
+      'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=800&auto=format&fit=crop&q=80'
+    ];
+    
+    const sportPool = [
+      'https://images.unsplash.com/photo-1502224562085-639556652f33?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1517747614396-d21a78b850e8?w=800&auto=format&fit=crop&q=80'
+    ];
+    
+    const acadPool = [
+      'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&auto=format&fit=crop&q=80'
+    ];
+    
+    const generalPool = [
+      'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1505232458627-5ec90be5864c?w=800&auto=format&fit=crop&q=80'
+    ];
+    
+    if (catLower.includes('tech') || catLower.includes('hack') || titleLower.includes('tech') || titleLower.includes('dev') || titleLower.includes('aws') || titleLower.includes('code') || titleLower.includes('concl') || titleLower.includes('concl')) {
+      return techPool[charCodeSum % techPool.length];
+    } else if (catLower.includes('cult') || catLower.includes('music') || catLower.includes('dance') || catLower.includes('art') || titleLower.includes('concert') || titleLower.includes('harmony') || titleLower.includes('fest') || titleLower.includes('liwin')) {
+      return cultPool[charCodeSum % cultPool.length];
+    } else if (catLower.includes('sport') || catLower.includes('run') || catLower.includes('marathon') || titleLower.includes('marathon') || titleLower.includes('run')) {
+      return sportPool[charCodeSum % sportPool.length];
+    } else if (catLower.includes('acad') || catLower.includes('talk') || catLower.includes('seminar') || catLower.includes('ted') || titleLower.includes('tedx') || titleLower.includes('summit') || titleLower.includes('prest')) {
+      return acadPool[charCodeSum % acadPool.length];
+    }
+    
+    return generalPool[charCodeSum % generalPool.length];
+  }
+
   getDb() {
     let rawData = null;
     if (this.memoryDb) {
@@ -97,39 +153,20 @@ class SandboxDB {
       this.memoryDb = rawData;
     }
 
-    // Retroactive self-healing repair: Fix any events that got identical generic crowd banners during previous quota rescues
+    // Retroactive self-healing repair: Fix any events that got identical generic crowd or office banners during previous quota rescues
     let needsRepairSave = false;
     if (rawData.events) {
       Object.keys(rawData.events).forEach(id => {
         const ev = rawData.events[id];
-        // Match either the exact default crowd placeholder or any uncompressed base64 data URL
-        if (ev.bannerUrl && (ev.bannerUrl.includes('photo-1540575467063-178a50c2df87') || ev.bannerUrl.startsWith('data:image/'))) {
+        // Match either the generic crowd placeholder, the generic single office tech placeholder, or any uncompressed base64 data URL
+        const hasCrowdBanner = ev.bannerUrl && ev.bannerUrl.includes('photo-1540575467063-178a50c2df87');
+        const hasOfficeBanner = ev.bannerUrl && ev.bannerUrl.includes('photo-1504384308090-c894fdcc538d');
+        const hasBase64Banner = ev.bannerUrl && ev.bannerUrl.startsWith('data:image/');
+        
+        if (ev.bannerUrl && (hasCrowdBanner || hasOfficeBanner || hasBase64Banner)) {
           // Keep the default seeder banners on our 3 core events, repair any newly created custom events
           if (ev.id !== 'demo-event-1' && ev.id !== 'demo-event-2' && ev.id !== 'demo-event-3') {
-            const titleLower = ev.title.toLowerCase();
-            const catLower = (ev.category || "").toLowerCase();
-            let newBanner = "";
-            
-            if (catLower.includes('tech') || catLower.includes('hack') || titleLower.includes('tech') || titleLower.includes('dev') || titleLower.includes('aws') || titleLower.includes('code')) {
-              newBanner = 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop&q=80';
-            } else if (catLower.includes('cult') || catLower.includes('music') || catLower.includes('dance') || catLower.includes('art') || titleLower.includes('concert') || titleLower.includes('harmony') || titleLower.includes('fest') || titleLower.includes('liwin') || titleLower.includes('s summit') || titleLower.includes('mumbai')) {
-              newBanner = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80';
-            } else if (catLower.includes('sport') || catLower.includes('run') || catLower.includes('marathon') || titleLower.includes('marathon') || titleLower.includes('run') || titleLower.includes('marathonx')) {
-              newBanner = 'https://images.unsplash.com/photo-1502224562085-639556652f33?w=800&auto=format&fit=crop&q=80';
-            } else if (catLower.includes('acad') || catLower.includes('talk') || catLower.includes('seminar') || catLower.includes('ted') || titleLower.includes('tedx') || titleLower.includes('summit') || titleLower.includes('presto')) {
-              newBanner = 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=800&auto=format&fit=crop&q=80';
-            } else {
-              // Deterministically hash the title to give unrelated events a unique placeholder to avoid duplication!
-              const charCodeSum = ev.title.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-              const randomPlaceholders = [
-                'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
-                'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&auto=format&fit=crop&q=80',
-                'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&auto=format&fit=crop&q=80',
-                'https://images.unsplash.com/photo-1505232458627-5ec90be5864c?w=800&auto=format&fit=crop&q=80'
-              ];
-              newBanner = randomPlaceholders[charCodeSum % randomPlaceholders.length];
-            }
-            
+            const newBanner = this.getDiverseBanner(ev.title, ev.category);
             if (ev.bannerUrl !== newBanner) {
               ev.bannerUrl = newBanner;
               needsRepairSave = true;
@@ -186,34 +223,13 @@ class SandboxDB {
       try {
         const pruned = JSON.parse(JSON.stringify(data));
         
-        // Clear massive base64 event banner images by replacing them with high-quality category-specific public URLs
+        // Clear massive base64 event banner images by replacing them with deterministically diverse public URLs
         if (pruned.events) {
           Object.keys(pruned.events).forEach(id => {
             const ev = pruned.events[id];
             if (ev.bannerUrl && ev.bannerUrl.startsWith('data:image/')) {
               console.log(`Self-healing: replacing heavy base64 banner for event "${ev.title}" with category-specific Unsplash placeholder.`);
-              
-              const titleLower = ev.title.toLowerCase();
-              const catLower = (ev.category || "").toLowerCase();
-              
-              if (catLower.includes('tech') || catLower.includes('hack') || titleLower.includes('tech') || titleLower.includes('dev') || titleLower.includes('aws') || titleLower.includes('code')) {
-                ev.bannerUrl = 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop&q=80';
-              } else if (catLower.includes('cult') || catLower.includes('music') || catLower.includes('dance') || catLower.includes('art') || titleLower.includes('concert') || titleLower.includes('harmony') || titleLower.includes('fest') || titleLower.includes('liwin') || titleLower.includes('s summit') || titleLower.includes('mumbai')) {
-                ev.bannerUrl = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80';
-              } else if (catLower.includes('sport') || catLower.includes('run') || catLower.includes('marathon') || titleLower.includes('marathon') || titleLower.includes('run') || titleLower.includes('marathonx')) {
-                ev.bannerUrl = 'https://images.unsplash.com/photo-1502224562085-639556652f33?w=800&auto=format&fit=crop&q=80';
-              } else if (catLower.includes('acad') || catLower.includes('talk') || catLower.includes('seminar') || catLower.includes('ted') || titleLower.includes('tedx') || titleLower.includes('summit') || titleLower.includes('presto')) {
-                ev.bannerUrl = 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=800&auto=format&fit=crop&q=80';
-              } else {
-                const charCodeSum = ev.title.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-                const randomPlaceholders = [
-                  'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
-                  'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&auto=format&fit=crop&q=80',
-                  'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&auto=format&fit=crop&q=80',
-                  'https://images.unsplash.com/photo-1505232458627-5ec90be5864c?w=800&auto=format&fit=crop&q=80'
-                ];
-                ev.bannerUrl = randomPlaceholders[charCodeSum % randomPlaceholders.length];
-              }
+              ev.bannerUrl = this.getDiverseBanner(ev.title, ev.category);
             }
           });
         }
