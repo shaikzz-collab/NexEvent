@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, ShieldCheck, LogOut, LogIn, Award, Sparkles, Clock, Calendar, Users, Eye, EyeOff, User, Compass, HelpCircle, Search } from 'lucide-react';
-import { checkAndSeedDatabase, fetchCollection, pushNotification, saveDocument, updateDocument, isRealFirebase } from './dbService';
+import { checkAndSeedDatabase, fetchCollection, pushNotification, saveDocument, updateDocument, isRealFirebase, isMemoryFallbackActive } from './dbService';
 
 // Import portal sub-views using React.lazy for optimized PageSpeed chunk-splitting
 const PortalOrganizer = React.lazy(() => import('./components/PortalOrganizer'));
@@ -613,9 +613,13 @@ export default function App() {
           
           <select className="input-field" value={guestCategory} onChange={e => setGuestCategory(e.target.value)} style={{ maxWidth: '200px' }}>
             <option value="All">All Categories</option>
-            <option value="Tech">Tech</option>
-            <option value="Cultural">Cultural</option>
+            <option value="Tech">Technology</option>
+            <option value="Cultural">Cultural / Arts</option>
+            <option value="Sports">Sports</option>
+            <option value="Academic">Academic</option>
+            <option value="Workshop">Workshop</option>
             <option value="Hackathon">Hackathon</option>
+            <option value="Other">Other</option>
           </select>
         </div>
 
@@ -651,6 +655,44 @@ export default function App() {
 
   return (
     <>
+      {/* Floating Quota Warning Banner for extreme resilience */}
+      {isMemoryFallbackActive() && (
+        <div style={{
+          position: 'fixed',
+          top: '80px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 99999,
+          width: '90%',
+          maxWidth: '900px',
+          background: 'rgba(239, 68, 68, 0.95)',
+          color: '#ffffff',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 8px 32px 0 rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '1rem',
+          padding: '0.8rem 1.5rem',
+          borderRadius: '8px',
+          backdropFilter: 'blur(8px)',
+          fontFamily: 'Outfit, sans-serif'
+        }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.5rem', textAlign: 'left', lineHeight: '1.4' }}>
+            ⚠️ Storage Warning: Browser local storage is full due to other sites. Running in temporary memory mode (changes will reset on reload).
+          </span>
+          <button onClick={async () => {
+            if (confirm("Clear browser local storage for this domain to reclaim space and enable persistent saving? All data will be cleanly reseeded.")) {
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.reload();
+            }
+          }} className="btn" style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem', background: '#ffffff', color: '#dc2626', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', flexShrink: 0 }}>
+            Fix Space & Reload
+          </button>
+        </div>
+      )}
+
       {/* Top Navbar */}
       <nav className="navbar">
         <div style={{ maxWidth: '1600px', width: '100%', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

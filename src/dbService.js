@@ -645,6 +645,11 @@ export const isSandboxEmpty = () => {
   return Object.keys(data.users || {}).length === 0;
 };
 
+// Check if database is currently operating in volatile in-memory fallback
+export const isMemoryFallbackActive = () => {
+  return sandbox.memoryDb !== null;
+};
+
 // Helper to recursively sanitize all string properties of a database payload (XSS prevention)
 export const sanitizeRecursive = (obj, parentKey = '') => {
   if (typeof obj === 'string') {
