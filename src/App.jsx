@@ -12,12 +12,14 @@ const VerifyCertificate = React.lazy(() => import('./components/VerifyCertificat
 const AdminHealth = React.lazy(() => import('./components/AdminHealth'));
 
 import DevTestPanel from './components/DevTestPanel';
+import DbStatusModal from './components/DbStatusModal';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentHash, setCurrentHash] = useState(window.location.hash || '#/');
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showDbStatusModal, setShowDbStatusModal] = useState(false);
   
   // Login Form States
   const [email, setEmail] = useState('');
@@ -52,6 +54,7 @@ export default function App() {
 
   // Global events landing catalog
   const [eventsCatalog, setEventsCatalog] = useState([]);
+  const [sponsorshipsCatalog, setSponsorshipsCatalog] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [guestSearch, setGuestSearch] = useState('');
   const [guestCategory, setGuestCategory] = useState('All');
@@ -89,6 +92,13 @@ export default function App() {
     const loadCatalog = async () => {
       const allEvents = await fetchCollection('events');
       setEventsCatalog(allEvents.filter(e => e.status === 'live'));
+      
+      try {
+        const allSpons = await fetchCollection('sponsorships');
+        setSponsorshipsCatalog(allSpons.filter(s => s.status === 'approved'));
+      } catch (err) {
+        console.error("Sponsor catalog fetch skipped: ", err);
+      }
     };
     loadCatalog();
   }, [currentUser, currentHash]);
@@ -278,6 +288,8 @@ export default function App() {
     const event = eventsCatalog.find(e => e.id === id);
     if (!event) return <div style={{ padding: '4rem', textAlign: 'center' }}>Event not found.</div>;
 
+    const eventSponsors = sponsorshipsCatalog.filter(s => s.eventId === event.id);
+
     return (
       <div className="event-detail-grid" style={{ marginTop: '3rem' }}>
         <div>
@@ -285,6 +297,23 @@ export default function App() {
           <span className="tag-badge" style={{ color: 'var(--accent-cyan)', borderColor: 'var(--accent-cyan)' }}>{event.category}</span>
           <h1 style={{ fontSize: '2.5rem', marginTop: '0.5rem', marginBottom: '1rem', color: '#ffffff' }}>{event.title}</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '2rem' }}>{event.desc}</p>
+
+          {/* Proud Corporate Partners Showcase Banner */}
+          {eventSponsors.length > 0 && (
+            <div className="glass-panel" style={{ padding: '1.5rem', marginTop: '2rem', border: '1px solid rgba(99,102,241,0.15)', background: 'rgba(99,102,241,0.02)' }}>
+              <h3 style={{ fontSize: '1.1rem', color: '#ffffff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Sparkles size={16} style={{ color: 'var(--accent-indigo)' }} /> Proud Corporate Sponsors
+              </h3>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {eventSponsors.map(spon => (
+                  <div key={spon.id} className="glass-card" style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.9rem', color: '#ffffff', fontWeight: '700' }}>{spon.sponsorCompany}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', background: 'rgba(6,182,212,0.1)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: '600' }}>{spon.packageName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="glass-panel" style={{ height: 'fit-content', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -696,9 +725,40 @@ export default function App() {
       {/* Top Navbar */}
       <nav className="navbar">
         <div style={{ maxWidth: '1600px', width: '100%', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div className="nav-brand" onClick={() => { window.location.hash = '#/'; }}>
-            <Sparkles size={20} style={{ color: 'var(--accent-cyan)' }} />
-            NexEvent Hub
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div className="nav-brand" onClick={() => { window.location.hash = '#/'; }}>
+              <Sparkles size={20} style={{ color: 'var(--accent-cyan)' }} />
+              NexEvent Hub
+            </div>
+            
+            {/* Database Engine Status HUD */}
+            <div 
+              onClick={() => setShowDbStatusModal(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.25rem 0.6rem',
+                borderRadius: '20px',
+                fontSize: '0.75rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                background: isRealFirebase() ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 179, 8, 0.1)',
+                border: isRealFirebase() ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(234, 179, 8, 0.3)',
+                color: isRealFirebase() ? '#4ade80' : '#facc15',
+                transition: 'all 0.2s ease',
+              }}
+              className="pulse-active"
+              title="Database Mode. Click to inspect Cloud Database settings"
+            >
+              <span style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: isRealFirebase() ? '#4ade80' : '#facc15',
+              }} />
+              {isRealFirebase() ? 'Cloud Live (Firestore)' : 'Sandbox Mode (Local)'}
+            </div>
           </div>
 
           <div className="nav-links">
@@ -785,6 +845,9 @@ export default function App() {
 
       {/* Dev Console Keyboard shortcut Panel Overlay (Ctrl+Shift+T) */}
       <DevTestPanel />
+
+      {/* Database Connection HUD Overlay */}
+      <DbStatusModal isOpen={showDbStatusModal} onClose={() => setShowDbStatusModal(false)} />
     </>
   );
 }

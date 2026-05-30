@@ -26,6 +26,7 @@ export default function PortalParticipant({ user }) {
   // Register Form State
   const [customAnswers, setCustomAnswers] = useState({});
   const [regSuccess, setRegSuccess] = useState(false);
+  const [selectedTicketType, setSelectedTicketType] = useState('General');
 
   const loadParticipantData = async () => {
     try {
@@ -363,6 +364,32 @@ export default function PortalParticipant({ user }) {
     const regId = `reg-${Date.now()}`;
     const hash = btoa(`${selectedEvent.id}|${user.uid}|reg`);
     
+    // Determine dynamic price and ticketType based on selection
+    let finalTicketType = 'General Admission';
+    let finalPrice = 0;
+
+    if (selectedEvent.pricing === 'paid') {
+      if (selectedTicketType === 'VIP') {
+        finalTicketType = 'VIP Premium Access Pass';
+        finalPrice = selectedEvent.ticketPrice * 2; // VIP is 2x base price
+      } else if (selectedTicketType === 'EarlyBird') {
+        finalTicketType = 'Early-Bird Standard Pass';
+        finalPrice = Math.round(selectedEvent.ticketPrice * 0.8); // EarlyBird is 20% off
+      } else {
+        finalTicketType = 'Standard General Pass';
+        finalPrice = selectedEvent.ticketPrice;
+      }
+    } else {
+      // Free events can have VIP supporter upgrade as well!
+      if (selectedTicketType === 'VIP') {
+        finalTicketType = 'VIP Supporter Pass';
+        finalPrice = 199; // VIP Supporter upgrade for free events
+      } else {
+        finalTicketType = 'General Admission';
+        finalPrice = 0;
+      }
+    }
+    
     const newReg = {
       id: regId,
       eventId: selectedEvent.id,
@@ -370,7 +397,8 @@ export default function PortalParticipant({ user }) {
       userId: user.uid,
       userName: user.name,
       userEmail: user.email,
-      ticketType: selectedEvent.pricing === 'free' ? 'General Admission' : 'Standard Paid Pass',
+      ticketType: finalTicketType,
+      ticketPrice: finalPrice,
       customAnswers: customAnswers,
       status: 'active',
       checked_in: false,
@@ -567,17 +595,91 @@ export default function PortalParticipant({ user }) {
                 ) : (
                   <div className="glass-card" style={{ background: 'rgba(255,255,255,0.01)' }}>
                     <h3 style={{ fontSize: '1.2rem', marginBottom: '1.25rem' }}>Ticket Checkout</h3>
-                    
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.75rem' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>Ticket Type:</span>
-                      <span style={{ fontWeight: '600', color: '#ffffff' }}>{selectedEvent.pricing === 'free' ? "General Admission" : "Paid Entry Pass"}</span>
-                    </div>
+                                 <div style={{ marginBottom: '1.5rem' }}>
+                      <label className="input-label" style={{ marginBottom: '0.5rem', display: 'block' }}>Select Ticket Tier:</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {/* Option 1: General */}
+                        <div 
+                          className={`glass-card ${selectedTicketType === 'General' ? 'selected' : ''}`} 
+                          onClick={() => setSelectedTicketType('General')}
+                          style={{ 
+                            padding: '0.75rem', 
+                            cursor: 'pointer', 
+                            background: selectedTicketType === 'General' ? 'rgba(99,102,241,0.08)' : 'rgba(0,0,0,0.15)',
+                            borderColor: selectedTicketType === 'General' ? 'var(--accent-indigo)' : 'rgba(255,255,255,0.05)',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <div>
+                            <span style={{ fontWeight: '700', fontSize: '0.9rem', color: '#ffffff', display: 'block' }}>General Admission</span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Standard Access</span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontWeight: '700', color: '#4ade80', display: 'block' }}>
+                              {selectedEvent.pricing === 'free' ? "FREE" : `₹${selectedEvent.ticketPrice}`}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: '#4ade80' }}>82 left</span>
+                          </div>
+                        </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: '700', marginBottom: '2rem' }}>
-                      <span>Price:</span>
-                      <span style={{ color: selectedEvent.pricing === 'free' ? '#4ade80' : 'var(--accent-cyan)' }}>
-                        {selectedEvent.pricing === 'free' ? "FREE" : `₹${selectedEvent.ticketPrice}`}
-                      </span>
+                        {/* Option 2: VIP Upgrade */}
+                        <div 
+                          className={`glass-card ${selectedTicketType === 'VIP' ? 'selected' : ''}`} 
+                          onClick={() => setSelectedTicketType('VIP')}
+                          style={{ 
+                            padding: '0.75rem', 
+                            cursor: 'pointer', 
+                            background: selectedTicketType === 'VIP' ? 'rgba(99,102,241,0.08)' : 'rgba(0,0,0,0.15)',
+                            borderColor: selectedTicketType === 'VIP' ? 'var(--accent-indigo)' : 'rgba(255,255,255,0.05)',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <div>
+                            <span style={{ fontWeight: '700', fontSize: '0.9rem', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              VIP Access Pass <Sparkles size={12} style={{ color: 'var(--accent-cyan)' }} />
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Front Row + Credentials Kit</span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontWeight: '700', color: 'var(--accent-cyan)', display: 'block' }}>
+                              {selectedEvent.pricing === 'free' ? "₹199" : `₹${selectedEvent.ticketPrice * 2}`}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: '#f87171', fontWeight: 'bold' }}>Only 3 left!</span>
+                          </div>
+                        </div>
+
+                        {/* Option 3: Early Bird (only if paid event) */}
+                        {selectedEvent.pricing === 'paid' && (
+                          <div 
+                            className={`glass-card ${selectedTicketType === 'EarlyBird' ? 'selected' : ''}`} 
+                            onClick={() => setSelectedTicketType('EarlyBird')}
+                            style={{ 
+                              padding: '0.75rem', 
+                              cursor: 'pointer', 
+                              background: selectedTicketType === 'EarlyBird' ? 'rgba(99,102,241,0.08)' : 'rgba(0,0,0,0.15)',
+                              borderColor: selectedTicketType === 'EarlyBird' ? 'var(--accent-indigo)' : 'rgba(255,255,255,0.05)',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <div>
+                              <span style={{ fontWeight: '700', fontSize: '0.9rem', color: '#ffffff', display: 'block' }}>Early-Bird Discount</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>20% OFF Limited Offer</span>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <span style={{ fontWeight: '700', color: 'var(--accent-indigo)', display: 'block' }}>
+                                ₹{Math.round(selectedEvent.ticketPrice * 0.8)}
+                              </span>
+                              <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>Ending soon</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <form onSubmit={handleRegisterEvent}>
